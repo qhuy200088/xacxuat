@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác Suất Xúc Xắc: Nhỏ hay Lớn?</title>
+    <style>
+        /* CSS cơ bản */
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #007bff;
+        }
+        .dice-display {
+            font-size: 48px;
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        .dice {
+            width: 60px; 
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #007bff;
+        }
+        .button-group button {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #btnNho {
+            background-color: #28a745; 
+            color: white;
+        }
+        #btnLon {
+            background-color: #dc3545; 
+            color: white;
+        }
+        #btnNho:hover:not(:disabled), #btnLon:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+        #message {
+            margin-top: 20px;
+            font-size: 20px;
+            font-weight: bold;
+            min-height: 50px; 
+        }
+        #countdown {
+            margin: 10px 0;
+            font-size: 1.1em;
+            color: #007bff;
+            font-weight: bold;
+        }
+        /* Ẩn nút vòng mới */
+        #newRoundButton {
+            display: none; 
+        }
+        /* CSS cho Lịch sử */
+        #historyContainer {
+            margin-top: 30px;
+            padding: 15px;
+            border-top: 2px solid #ccc;
+        }
+        #historyList {
+            display: flex; 
+            flex-wrap: wrap; 
+            justify-content: center;
+            list-style: none;
+            padding: 0;
+            gap: 5px; 
+            max-height: 120px; 
+            overflow-y: auto;
+        }
+        .history-item {
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: bold;
+            color: white;
+            min-width: 40px;
+            text-align: center;
+            margin-bottom: 5px; 
+        }
+        .small-result {
+            background-color: #007bff; /* Xanh dương cho NHỎ */
+        }
+        .large-result {
+            background-color: #dc3545; /* Đỏ cho LỚN */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🎲 Học Xác Suất: Nhỏ (3-10) hay Lớn (11-18)?</h1>
+        
+        <p id="countdown">Đang chờ...</p>
+        
+        <div class="dice-display">
+            <span id="dice1" class="dice">?</span>
+            <span id="dice2" class="dice">?</span>
+            <span id="dice3" class="dice">?</span>
+        </div>
+        <p>Tổng điểm: <span id="totalScore">Ẩn</span></p>
+
+        <div class="button-group">
+            <button id="btnNho" onclick="makeGuess('Nho')">NHỎ (3 - 10)</button>
+            <button id="btnLon" onclick="makeGuess('Lon')">LỚN (11 - 18)</button>
+        </div>
+        
+        <div id="message"></div>
+        
+        <div id="historyContainer">
+            <h3>📈 Lịch Sử 20 Lần Gần Nhất</h3>
+            <div id="historyList">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // Cấu hình thời gian
+        const GUESSING_TIME = 50000; // 50 giây (50000ms)
+        const DISPLAY_TIME = 10000;  // 10 giây hiển thị tĩnh
+        
+        // Biểu tượng xúc xắc
+        const diceSymbols = ['&#9856;', '&#9857;', '&#9858;', '&#9859;', '&#9860;', '&#9861;']; 
+
+        let diceValues = [0, 0, 0];
+        let gameActive = true; 
+        let userGuess = null; 
+        let guessTimer; 
+        let countdownInterval; 
+        let historyData = []; 
+
+        // Hàm tung xúc xắc
+        function rollDice() {
+            return Math.floor(Math.random() * 6) + 1;
+        }
+
+        // --- HÀM CẬP NHẬT LỊCH SỬ HIỂN THỊ ---
+        function updateHistoryDisplay() {
+            const listElement = document.getElementById('historyList');
+            listElement.innerHTML = ''; 
+
+            for (let i = historyData.length - 1; i >= 0; i--) {
+                const item = historyData[i];
+                const resultText = item.result === 'Nho' ? 'NHỎ' : 'LỚN';
+                const className = item.result === 'Nho' ? 'small-result' : 'large-result';
+                
+                const historyItem = document.createElement('span');
+                historyItem.className = 'history-item ' + className;
+                historyItem.textContent = `${item.total} (${resultText.charAt(0)})`; 
+                listElement.appendChild(historyItem);
+            }
+        }
+        
+        // --- HÀM THÊM KẾT QUẢ VÀO LỊCH SỬ ---
+        function addResultToHistory(total, actualResult) {
+            historyData.push({ total: total, result: actualResult }); 
+
+            if (historyData.length > 20) {
+                historyData.shift(); 
+            }
+            updateHistoryDisplay();
+        }
+
+        // --- HÀM XỬ LÝ HẾT GIỜ VÀ HIỂN THỊ KẾT QUẢ ---
+        function handleTimeoutAndReveal() {
+            clearInterval(countdownInterval);
+            gameActive = false; 
+
+            // Tính toán kết quả
+            const total = diceValues[0] + diceValues[1] + diceValues[2];
+            const actualResult = (total >= 3 && total <= 10) ? 'Nho' : 'Lon'; 
+
+            // **QUAN TRỌNG:** Thêm kết quả vào lịch sử
+            addResultToHistory(total, actualResult);
+
+            // Hiển thị xúc xắc và tổng điểm
+            document.getElementById('dice1').innerHTML = diceSymbols[diceValues[0] - 1];
+            document.getElementById('dice2').innerHTML = diceSymbols[diceValues[1] - 1];
+            document.getElementById('dice3').innerHTML = diceSymbols[diceValues[2] - 1];
+            document.getElementById('totalScore').textContent = total;
+            
+            // Xác định thông báo
+            let message = '';
+            let messageColor = '#333';
+
+            if (userGuess === null) {
+                message = '⏰ **HẾT GIỜ!** Bạn chưa kịp đoán. Kết quả đúng là ' + (actualResult === 'Nho' ? 'NHỎ' : 'LỚN') + ' (Tổng: ' + total + ').';
+                messageColor = '#ff9800'; 
+            } else {
+                if (userGuess === actualResult) {
+                    message = '🎉 CHÍNH XÁC! Tổng là ' + total + '! Đã hiển thị kết quả.';
+                    messageColor = '#28a745'; 
+                } else {
+                    message = '❌ CHƯA CHÍNH XÁC. Tổng là ' + total + '. Đáp án đúng là ' + (actualResult === 'Nho' ? 'NHỎ' : 'LỚN') + '! Đã hiển thị kết quả.';
+                    messageColor = '#dc3545'; 
+                }
+            }
+
+            document.getElementById('message').innerHTML = message;
+            document.getElementById('message').style.color = messageColor; 
+            
+            // Thông báo hiển thị tĩnh 10s (Không đếm ngược)
+            document.getElementById('countdown').textContent = 'Vòng mới sẽ bắt đầu sau 10 giây...'; 
+            document.getElementById('countdown').style.color = '#6c757d'; 
+
+            // Bắt đầu timer 10 giây ẩn, sau đó reset (tự động lặp lại)
+            setTimeout(resetGame, DISPLAY_TIME);
+        }
+
+        // --- HÀM CẬP NHẬT ĐỒNG HỒ ĐẾM NGƯỢC (50s) ---
+        function updateCountdown(startTime) {
+            let timeLeft = Math.floor((startTime - Date.now()) / 1000);
+            document.getElementById('countdown').textContent = timeLeft + ' giây để đoán...';
+            
+            if (timeLeft <= 10) {
+                 document.getElementById('countdown').style.color = '#dc3545';
+            } else {
+                 document.getElementById('countdown').style.color = '#007bff';
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(countdownInterval);
+            }
+        }
+
+        // --- HÀM KHỞI ĐỘNG VÒNG CHƠI MỚI (ẨN + 50 GIÂY) ---
+        function resetGame() {
+            clearTimeout(guessTimer); 
+            clearInterval(countdownInterval); 
+            userGuess = null; 
+
+            // 1. Tung 3 viên xúc xắc mới
+            diceValues[0] = rollDice();
+            diceValues[1] = rollDice();
+            diceValues[2] = rollDice();
+            
+            // 2. Ẩn kết quả
+            document.getElementById('dice1').innerHTML = '?'; 
+            document.getElementById('dice2').innerHTML = '?';
+            document.getElementById('dice3').innerHTML = '?';
+            document.getElementById('totalScore').textContent = 'Ẩn';
+            
+            // 3. Chuẩn bị trạng thái game
+            document.getElementById('message').textContent = 'Hãy đưa ra dự đoán của bạn trong 50 giây!';
+            document.getElementById('message').style.color = '#333';
+            gameActive = true;
+            
+            document.getElementById('btnNho').disabled = false;
+            document.getElementById('btnLon').disabled = false;
+            
+            // 4. Bắt đầu đếm ngược 50 giây
+            const startTime = Date.now() + GUESSING_TIME;
+            updateCountdown(startTime); 
+            countdownInterval = setInterval(() => updateCountdown(startTime), 1000);
+            
+            // 5. Thiết lập timeout 50 giây để tiết lộ kết quả
+            guessTimer = setTimeout(handleTimeoutAndReveal, GUESSING_TIME);
+        }
+
+        // --- HÀM XỬ LÝ KHI NGƯỜI DÙNG ĐOÁN ---
+        function makeGuess(guess) {
+            if (!gameActive) {
+                document.getElementById('message').textContent = 'Vui lòng chờ hết thời gian đếm ngược để xem kết quả!';
+                return;
+            }
+            
+            userGuess = guess;
+            
+            document.getElementById('message').innerHTML = '✅ **Đã ghi nhận dự đoán của bạn!** Vui lòng chờ hết thời gian đếm ngược để xem kết quả.';
+            document.getElementById('message').style.color = '#007bff'; 
+            
+            gameActive = false;
+            document.getElementById('btnNho').disabled = true;
+            document.getElementById('btnLon').disabled = true;
+
+            // QUAN TRỌNG: Không dừng guessTimer. Nó sẽ gọi handleTimeoutAndReveal sau khi hết 50s.
+        }
+
+        // Khởi động game khi trang vừa tải
+        resetGame();
+    </script>
+
+</body>
+</html>
